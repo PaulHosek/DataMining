@@ -51,11 +51,11 @@ def granger_causality_matrix(data, variables, test="ssr_chi2test", verbose=False
     return df
 
 def build_granger_heatmap():
-    df1 = pd.read_csv(f"aggregated_individual_data/{0}_aggregated.csv", index_col=0, parse_dates=["date"])
+    df1 = pd.read_csv(f"data/aggregated_individual_data/{0}_aggregated.csv", index_col=0, parse_dates=["date"])
     df1['days'] = (df1['date'] - df1['date'].min()).dt.days.astype(int)
     df1.drop(["date"], axis=1, inplace=True)
     for i in range(1, 27):
-        df2 = pd.read_csv(f"aggregated_individual_data/{0}_aggregated.csv", index_col=0, parse_dates=["date"])
+        df2 = pd.read_csv(f"data/aggregated_individual_data/{0}_aggregated.csv", index_col=0, parse_dates=["date"])
 
         df2['days'] = (df2['date'] - df2['date'].min()).dt.days.astype(int)
         df2.drop(["date"], axis=1, inplace=True)
