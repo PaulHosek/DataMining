@@ -1,13 +1,14 @@
-import os
-import datetime
-
-import IPython
-import IPython.display
+"""
+Code adapted and modified from the following sources.
+https://www.tensorflow.org/tutorials/structured_data/time_series
+https://stackoverflow.com/questions/49994496/mixing-multiple-tf-data-dataset
+https://medium.com/@kavyamalla/extending-tensorflows-window-generator-for-multiple-time-series-8b15eba57858
+https://www.tensorflow.org/guide/keras/rnn
+"""
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import seaborn as sns
 import tensorflow as tf
 from tensorflow.keras.utils import timeseries_dataset_from_array
 
@@ -109,7 +110,8 @@ class MultiSeriesWindowsGenerator():
 
         return inputs, labels
 
-    def plot(self, inputs, labels, model=None, plot_col=None, max_subplots=3):
+    def plot(self, model=None, plot_col=None, max_subplots=3):
+        inputs, labels = self.example
         if not plot_col:
             plot_col = self.LABELS[0]
         plt.figure(figsize=(12, 8))
@@ -157,10 +159,6 @@ class MultiSeriesWindowsGenerator():
         ds = ds.map(self.split_window)
         return ds
 
-    """
-    Reference code from https://stackoverflow.com/questions/49994496/mixing-multiple-tf-data-dataset
-    """
-
 
     def make_dataset(self, data: tf.Tensor) -> tf.data.Dataset:
         # num_cohorts = min(10, len(cluster_cohorts))
@@ -202,55 +200,6 @@ class MultiSeriesWindowsGenerator():
         return result
 
 
-if __name__ == "__main__":
 
-    data_list = []
-    for i in range(0, 27):
-        df = pd.read_csv(f"data/aggregated_individual_data_interpolation/interpolation/{i}_interpolated.csv",
-                         index_col=0)
-        df["subject_id"] = i + 1
-        data_list.append(df)
-
-    data = pd.concat(data_list)
-    data.drop(["circumplex.arousal_std", "circumplex.valence_std", "mood_std", "activity_std", "date"], inplace=True,
-              axis=1)
-    df = data
-
-    # TODO Fix this later in the preprocessing
-    df.fillna(0, inplace=True)
-
-    LABELS = ['mood']
-    REGRESSORS = ['weekday', 'circumplex.arousal', 'circumplex.valence',
-                  'activity', 'screen', 'call', 'sms', 'appCat.builtin',
-                  'appCat.communication', 'appCat.entertainment', 'appCat.finance',
-                  'appCat.game', 'appCat.office', 'appCat.other', 'appCat.social',
-                  'appCat.travel', 'appCat.unknown', 'appCat.utilities', 'appCat.weather']
-
-    REGRESSORS = ['weekday']
-    DATE = 'days'
-    IN_STEPS = 24
-    OUT_STEPS = 24
-    GROUPBY = ['subject_id']
-    BATCH_SIZE = 8
-
-    n = len(df)
-    train_series = df.groupby(GROUPBY, as_index=False, group_keys=False).apply(
-        lambda x: x.iloc[:int(len(x) * 0.7)]).reset_index(drop=True)
-    val_series = df.groupby(GROUPBY, as_index=False, group_keys=False).apply(
-        lambda x: x.iloc[int(len(x) * 0.7):int(len(x) * 0.9)]).reset_index(drop=True)
-    test_series = df.groupby(GROUPBY, as_index=False, group_keys=False).apply(
-        lambda x: x.iloc[int(len(x) * 0.9):]).reset_index(drop=True)
-    # train_series.shape, val_series.shape, test_series.shape
-
-
-    # initialise window and feed split data into it
-    w1 = MultiSeriesWindowsGenerator(input_width=IN_STEPS, label_width=OUT_STEPS, shift=OUT_STEPS,
-                                     batch_size=BATCH_SIZE, label_columns=LABELS, GROUPBY=GROUPBY,
-                                     regressor_columns=REGRESSORS, DATE=DATE, LABELS=LABELS)
-
-    w1.update_datasets(train_series, val_series, test_series, norm=True)
-    print(w1.train_df)
-
-    print(w1.make_dataset(data=w1.train_df))
 
 
