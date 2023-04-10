@@ -75,28 +75,7 @@ class MultiSeriesWindowsGenerator():
             print('Error while processing dataset', e)
         return data
 
-    def update_datasets(self, train_df: pd.DataFrame, val_df: pd.DataFrame, test_df: pd.DataFrame, norm: bool = False):
-        # Store the raw data.
-        self.train_df = self.preprocess_dataset(train_df)
-        self.val_df = self.preprocess_dataset(val_df)
-        self.test_df = self.preprocess_dataset(test_df)
-
-        if norm:
-            train_mean = tf.reduce_mean(self.train_df, axis=1, keepdims=True)
-            train_std = tf.math.reduce_std(self.train_df, axis=1, keepdims=True)
-
-            self.train_df = (self.train_df - train_mean) / train_std
-            self.val_df = (self.val_df - train_mean) / train_std
-            self.test_df = (self.test_df - train_mean) / train_std
-
-            self.train_mean = train_mean
-            self.train_std = train_std
-            self.norm = norm
-
-        labels = self.label_columns + self.regressor_columns + self.static_columns
-        self.column_indices = {name: i for i, name in enumerate(labels)}
-
-    def preprocess_dataset(self, data: pd.DataFrame):
+    def preprocess_dataset_2(self, data: pd.DataFrame):
         try:
             if np.vstack(data.index).shape[1] != 1:
                 data = data.reset_index()
@@ -104,20 +83,19 @@ class MultiSeriesWindowsGenerator():
             by = self.GROUPBY + [self.DATE]
             labels = self.label_columns + self.regressor_columns + self.static_columns
             data = data.set_index(by).unstack(-1)
+            data.fillna(0, inplace=True)
             data = tf.stack([data[label] for label in labels], axis=-1)
-
             if data.ndim != 3:
                 data = data[None, None, tf.newaxis]
         except Exception as e:
             print('Error while processing dataset', e)
         return data
 
-    def update_datasets(self, train_df: pd.DataFrame, val_df: pd.DataFrame,
-                        test_df: pd.DataFrame, norm: bool = False):
+    def update_datasets(self, train_df: pd.DataFrame, val_df: pd.DataFrame, test_df: pd.DataFrame, norm: bool = False):
         # Store the raw data.
-        self.train_df = self.preprocess_dataset(train_df)
-        self.val_df = self.preprocess_dataset(val_df)
-        self.test_df = self.preprocess_dataset(test_df)
+        self.train_df = self.preprocess_dataset_2(train_df)
+        self.val_df = self.preprocess_dataset_2(val_df)
+        self.test_df = self.preprocess_dataset_2(test_df)
 
         if norm:
             train_mean = tf.reduce_mean(self.train_df, axis=1, keepdims=True)
@@ -237,3 +215,58 @@ class MultiSeriesWindowsGenerator():
             result = next(iter(self.train))
             self._example = result
         return result
+
+
+# if __name__ == "__main__":
+#
+#     data_list = []
+#     for i in range(0, 27):
+#         df = pd.read_csv(f"data/aggregated_individual_data_interpolation/interpolation/{i}_interpolated.csv",
+#                          index_col=0)
+#         df["subject_id"] = i + 1
+#         data_list.append(df)
+#
+#     data = pd.concat(data_list)
+#     data.drop(["circumplex.arousal_std", "circumplex.valence_std", "mood_std", "activity_std", "date"], inplace=True,
+#               axis=1)
+#     df = data
+#
+#     # TODO Fix this later in the preprocessing
+#     df.fillna(0, inplace=True)
+#
+#     LABELS = ['mood']
+#     REGRESSORS = ['weekday', 'circumplex.arousal', 'circumplex.valence',
+#                   'activity', 'screen', 'call', 'sms', 'appCat.builtin',
+#                   'appCat.communication', 'appCat.entertainment', 'appCat.finance',
+#                   'appCat.game', 'appCat.office', 'appCat.other', 'appCat.social',
+#                   'appCat.travel', 'appCat.unknown', 'appCat.utilities', 'appCat.weather']
+#
+#     REGRESSORS = ['weekday']
+#     DATE = 'days'
+#     IN_STEPS = 24
+#     OUT_STEPS = 24
+#     GROUPBY = ['subject_id']
+#     BATCH_SIZE = 8
+#
+#     n = len(df)
+#     train_series = df.groupby(GROUPBY, as_index=False, group_keys=False).apply(
+#         lambda x: x.iloc[:int(len(x) * 0.7)]).reset_index(drop=True)
+#     val_series = df.groupby(GROUPBY, as_index=False, group_keys=False).apply(
+#         lambda x: x.iloc[int(len(x) * 0.7):int(len(x) * 0.9)]).reset_index(drop=True)
+#     test_series = df.groupby(GROUPBY, as_index=False, group_keys=False).apply(
+#         lambda x: x.iloc[int(len(x) * 0.9):]).reset_index(drop=True)
+#     # train_series.shape, val_series.shape, test_series.shape
+#
+#     print(train_series["weekday"].unique())
+#
+#     # initialise window and feed split data into it
+#     w1 = MultiSeriesWindowsGenerator(input_width=IN_STEPS, label_width=OUT_STEPS, shift=OUT_STEPS,
+#                                      batch_size=BATCH_SIZE, label_columns=LABELS, GROUPBY=GROUPBY,
+#                                      regressor_columns=REGRESSORS, DATE=DATE, LABELS=LABELS)
+#     # data will be normalised per person as well
+#     test_tdf2 = w1.preprocess_dataset(train_series)
+#     print(test_tdf2)
+
+    # w1.update_datasets(train_series, val_series, test_series, norm=True)
+
+
