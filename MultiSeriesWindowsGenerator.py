@@ -161,17 +161,18 @@ class MultiSeriesWindowsGenerator():
     Reference code from https://stackoverflow.com/questions/49994496/mixing-multiple-tf-data-dataset
     """
 
-    def stack_windows(*windows):
-        features = tf.concat([window[0] for window in windows], 0)
-        labels = tf.concat([window[1] for window in windows], 0)
-        return (features, labels)
 
     def make_dataset(self, data: tf.Tensor) -> tf.data.Dataset:
         # num_cohorts = min(10, len(cluster_cohorts))
         # print(cluster, num_cohorts)
+        def stack_windows(*windows):
+            features = tf.concat([window[0] for window in windows], 0)
+            labels = tf.concat([window[1] for window in windows], 0)
+            return (features, labels)
+
         ds_list = tuple(self.make_cohort(data[i]) for i in range(len(data)))
         ds = tf.data.Dataset.zip(ds_list)
-        ds = ds.map(self.stack_windows)
+        ds = ds.map(stack_windows)
         ds = ds.unbatch()
         ds = ds.shuffle(10, seed=0)
         ds = ds.batch(self.batch_size)
