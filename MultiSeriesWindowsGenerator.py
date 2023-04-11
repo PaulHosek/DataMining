@@ -296,6 +296,8 @@ if __name__ == "__main__":
     for i in range(0, 27):
         df = pd.read_csv(f"data/aggregated_individual_data_interpolation/interpolation/{i}_interpolated.csv",
                          index_col=0)
+        df = pd.read_csv(f"data/aggregated_individual_data_interpolation/interpolation/{i}_interpolated.csv",
+                         index_col=0)
         df["subject_id"] = i + 1
         data_list.append(df)
 
@@ -328,7 +330,7 @@ if __name__ == "__main__":
 
     DATE = 'days'  # always correct
     IN_STEPS = 14  # use 7 days
-    OUT_STEPS = 14  # to predict 1 day in the future
+    OUT_STEPS = 1  # to predict 1 day in the future
     GROUPBY = ['subject_id']
     BATCH_SIZE = 8
 
