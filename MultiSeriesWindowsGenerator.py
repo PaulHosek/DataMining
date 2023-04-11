@@ -327,8 +327,8 @@ if __name__ == "__main__":
                   'appCat.travel', 'appCat.unknown', 'appCat.utilities', 'appCat.weather']
 
     DATE = 'days'  # always correct
-    IN_STEPS = 7  # use 7 days
-    OUT_STEPS = 7  # to predict 1 day in the future
+    IN_STEPS = 14  # use 7 days
+    OUT_STEPS = 14  # to predict 1 day in the future
     GROUPBY = ['subject_id']
     BATCH_SIZE = 8
 
@@ -346,10 +346,36 @@ if __name__ == "__main__":
 
     test_window.update_datasets(train_series, val_series, test_series, norm=True)
     # print(test_window.test_df)
-    print("Are there nan in test:", np.array(tf.math.is_nan(test_window.test_df)).any())
-    print("Are there nan in test:", np.array(tf.math.is_nan(test_window.val_df)).any())
-    print("Are there nan in test:", np.array(tf.math.is_nan(test_window.train_df)).any())
+    lstm_model = tf.keras.models.Sequential([
+        # Shape [batch, time, features] => [batch, time, lstm_units]
+        tf.keras.layers.LSTM(32, return_sequences=True),
+        # Shape => [batch, time, features]
+        tf.keras.layers.Dense(units=1)
+    ])
+    MAX_EPOCHS = 20
 
+
+    def compile_and_fit(model, window, patience=2):
+        early_stopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss',
+                                                          patience=patience,
+                                                          mode='min')
+
+        model.compile(loss=tf.keras.losses.MeanSquaredError(),
+                      optimizer=tf.keras.optimizers.Adam(),
+                      metrics=[tf.keras.metrics.MeanAbsoluteError()])
+
+        history = model.fit(window.train, epochs=MAX_EPOCHS,
+                            validation_data=window.val,
+                            callbacks=[early_stopping])
+        return history
+
+    history = compile_and_fit(lstm_model, test_window)
+    val_performance = {}
+    performance = {}
+    val_performance['LSTM'] = lstm_model.evaluate(test_window.val)
+    performance['LSTM'] = lstm_model.evaluate(test_window.test, verbose=0)
+
+    test_window.plot(lstm_model)
 
 
 
