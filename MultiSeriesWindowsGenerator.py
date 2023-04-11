@@ -59,7 +59,7 @@ class MultiSeriesWindowsGenerator():
             f'GROUPBY column(s): {self.GROUPBY}'
         ])
 
-    def preprocess_dataset(self, data: pd.DataFrame):
+    def preprocess_dataset_old(self, data: pd.DataFrame):
         try:
             if np.vstack(data.index).shape[1] != 1:
                 data = data.reset_index()
@@ -67,6 +67,8 @@ class MultiSeriesWindowsGenerator():
             by = self.GROUPBY + [self.DATE]
             labels = self.label_columns + self.regressor_columns + self.static_columns
             data = data.set_index(by).unstack(-1)
+            # FIXME need to handle new nan better here
+
             data.fillna(0, inplace=True)
             data = tf.stack([data[label] for label in labels], axis=-1)
             if data.ndim != 3:
@@ -75,9 +77,49 @@ class MultiSeriesWindowsGenerator():
             print('Error while processing dataset', e)
         return data
 
+    def preprocess_dataset(self, data: pd.DataFrame):
+        """
+        Preprocesses a pandas DataFrame containing time series data by
+         filling missing values with zeros and stacking a boolean mask
+        tensor to indicate where NaN values are.
+        Args:
+            data: A pandas DataFrame containing time series data.
+        Returns:
+            A tensorflow Tensor with shape [batch_size, time_steps, num_features + 1],
+             where the last dimension contains the
+            preprocessed data values and a boolean mask tensor indicating where NaN values are.
+        """
+        try:
+            if np.vstack(data.index).shape[1] != 1:
+                data = data.reset_index()
+
+            by = self.GROUPBY + [self.DATE]
+            labels = self.label_columns + self.regressor_columns + self.static_columns
+            data = data.set_index(by).unstack(-1)
+            mask = tf.cast(tf.math.is_nan(data), dtype=tf.float32)
+            data = tf.where(tf.math.is_nan(data), tf.zeros_like(data), data)
+
+            # Stack the data and mask tensors together
+            data = tf.stack([data[label] for label in labels] + [mask], axis=-1)
+
+            if data.ndim != 3:
+                data = data[None, None, tf.newaxis]
+        except Exception as e:
+            print('Error while processing dataset', e)
+        return data
+
 
     def update_datasets(self, train_df: pd.DataFrame, val_df: pd.DataFrame, test_df: pd.DataFrame, norm: bool = False):
-        # Store the raw data.
+        """
+        Updates the stored training, validation, and test datasets, and optionally normalizes the data.
+        Args:
+            train_df: A pandas DataFrame containing training data.
+            val_df: A pandas DataFrame containing validation data.
+            test_df: A pandas DataFrame containing test data.
+            norm: A boolean flag indicating whether to normalize the data. Defaults to False.
+        Returns:
+            None.
+        """
         self.train_df = self.preprocess_dataset(train_df)
         self.val_df = self.preprocess_dataset(val_df)
         self.test_df = self.preprocess_dataset(test_df)
@@ -98,6 +140,14 @@ class MultiSeriesWindowsGenerator():
         self.column_indices = {name: i for i, name in enumerate(labels)}
 
     def split_window(self, features: tf.Tensor):
+        """
+        Splits a window of time series data into input and label windows, and returns them as two tensorflow Tensors.
+        Args: features: A tensorflow Tensor with shape [batch_size, window_size, num_features].
+        Returns: A tuple of two tensorflow Tensors: `inputs` with shape [batch_size, input_width, num_features]
+         containing the input window, and `labels` with shape [batch_size, label_width, num_labels]
+          containing the label window.
+
+        """
         inputs = features[:, self.input_slice, :]
         labels = features[:, self.labels_slice, :]
         if self.label_columns is not None:
@@ -147,6 +197,16 @@ class MultiSeriesWindowsGenerator():
         plt.show()
 
     def make_cohort(self, data: np.array) -> tf.data.Dataset:
+        """
+        Creates a tensorflow Dataset from a numpy array of time series data, with a sliding window of `total_window_size`
+        and a batch size of `batch_size`.
+        Args:
+            data: A numpy array of time series data
+            with shape [num_samples, num_features].
+        Returns:
+            A tensorflow Dataset containing a sliding window of the
+         time series data, split into input and label windows.
+        """
         data = np.array(data, dtype=np.float32)
         ds = timeseries_dataset_from_array(
             data=data,
@@ -161,9 +221,21 @@ class MultiSeriesWindowsGenerator():
 
 
     def make_dataset(self, data: tf.Tensor) -> tf.data.Dataset:
-        # num_cohorts = min(10, len(cluster_cohorts))
-        # print(cluster, num_cohorts)
+        """
+        Creates a tensorflow dataset from input data.
+        Args:
+            data (tf.Tensor): The input data.
+        Returns:
+            tf.data.Dataset: The dataset with features and labels batches, ready for training.
+        """
         def stack_windows(*windows):
+            """
+            Concatenates the input and label tensors in a window.
+            Args:
+                *windows (tf.Tensor): The tensors to concatenate.
+            Returns:
+                tf.Tensor: The concatenated tensors.
+            """
             features = tf.concat([window[0] for window in windows], 0)
             labels = tf.concat([window[1] for window in windows], 0)
             return (features, labels)
@@ -198,8 +270,3 @@ class MultiSeriesWindowsGenerator():
             result = next(iter(self.train))
             self._example = result
         return result
-
-
-
-
-
