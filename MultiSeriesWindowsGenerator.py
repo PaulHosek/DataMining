@@ -292,34 +292,19 @@ class MultiSeriesWindowsGenerator():
 
 if __name__ == "__main__":
 
-    data_list = []
-    for i in range(0, 27):
-        df = pd.read_csv(f"data/aggregated_individual_data_interpolation/interpolation/{i}_interpolated.csv",
-                         index_col=0)
-        df = pd.read_csv(f"data/aggregated_individual_data_interpolation/interpolation/{i}_interpolated.csv",
-                         index_col=0)
-        df["subject_id"] = i + 1
-        data_list.append(df)
-
-    # Concatenate the data into a single dataset
-    data = pd.concat(data_list)
-    data.drop(["circumplex.arousal_std", "circumplex.valence_std", "mood_std", "activity_std"], inplace=True, axis=1)
-
-    use_date = 0
-
-    if use_date:
-        data.drop(["date"], inplace=True, axis=1)
-        date_time = pd.to_datetime(data.pop('date'))
-        df = data
-        df['days'] = date_time
-
-    else:  # use days from day 0 of recording
-        data.drop(["date"], inplace=True, axis=1)
-        df = data
-
-    df.reset_index(inplace=True, drop=True)
-    df = df.astype({'subject_id': 'float64', 'days': 'float64', 'weekday': 'float64'})
-    df = data
+    # data_list = []
+    # for i in range(0, 27):
+    #     df = pd.read_csv(f"data/aggregated_individual_data_interpolation/interpolation/{i}_interpolated.csv",
+    #                      index_col=0)
+    #     df = pd.read_csv(f"data/aggregated_individual_data_interpolation/interpolation/{i}_interpolated.csv",
+    #                      index_col=0)
+    #     df["subject_id"] = i + 1
+    #     data_list.append(df)
+    #
+    # # Concatenate the data into a single dataset
+    # data = pd.concat(data_list)
+    # data.drop(["circumplex.arousal_std", "circumplex.valence_std", "mood_std", "activity_std"], inplace=True, axis=1)
+    df = pd.read_csv("data/all_data_aggr_nonan.csv", index_col=0)
 
     LABELS = ['mood']
     REGRESSORS = ['weekday', 'circumplex.arousal', 'circumplex.valence',
@@ -330,7 +315,7 @@ if __name__ == "__main__":
 
     DATE = 'days'  # always correct
     IN_STEPS = 14  # use 7 days
-    OUT_STEPS = 1  # to predict 1 day in the future
+    OUT_STEPS = 14  # to predict 1 day in the future
     GROUPBY = ['subject_id']
     BATCH_SIZE = 8
 
@@ -347,23 +332,32 @@ if __name__ == "__main__":
         label_columns=LABELS, regressor_columns=REGRESSORS, DATE=DATE, LABELS=LABELS)
 
     test_window.update_datasets(train_series, val_series, test_series, norm=True)
-    # print(test_window.test_df)
+
+    lstm_model = tf.keras.models.Sequential([
+        tf.keras.layers.LSTM(128, return_sequences=True,activation="relu"),
+        tf.keras.layers.Dropout(0.2),
+        tf.keras.layers.LSTM(128, return_sequences=False, activation="relu"),
+        tf.keras.layers.Dropout(0.2),
+        tf.keras.layers.Dense(units=1, activation='sigmoid', kernel_regularizer=tf.keras.regularizers.l2(0.001))
+    ])
+
     lstm_model = tf.keras.models.Sequential([
         # Shape [batch, time, features] => [batch, time, lstm_units]
         tf.keras.layers.LSTM(32, return_sequences=True),
         # Shape => [batch, time, features]
         tf.keras.layers.Dense(units=1)
     ])
+
     MAX_EPOCHS = 20
 
 
     def compile_and_fit(model, window, patience=2):
-        early_stopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss',
+        early_stopping = tf.keras.callbacks.EarlyStopping(monitor='loss',
                                                           patience=patience,
                                                           mode='min')
 
         model.compile(loss=tf.keras.losses.MeanSquaredError(),
-                      optimizer=tf.keras.optimizers.Adam(),
+                      optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
                       metrics=[tf.keras.metrics.MeanAbsoluteError()])
 
         history = model.fit(window.train, epochs=MAX_EPOCHS,
