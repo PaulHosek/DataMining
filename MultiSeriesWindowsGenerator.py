@@ -179,7 +179,7 @@ class MultiSeriesWindowsGenerator():
 
         return inputs, labels
 
-    def plot(self, model=None, plot_col=None, max_subplots=3, single=False):
+    def plot(self, model=None, plot_col=None, max_subplots=3, single=False, y_lab=None):
         inputs, labels = self.example
         if not plot_col:
             plot_col = self.LABELS[0]
@@ -189,7 +189,10 @@ class MultiSeriesWindowsGenerator():
 
         for n in range(max_n):
             plt.subplot(max_n, 1, n + 1)
-            plt.ylabel(f'{plot_col} {"[normed]" if self.norm else ""}')
+            if y_lab:
+                plt.ylabel(y_lab)
+            else:
+                plt.ylabel(f'{plot_col} {"[normed]" if self.norm else ""}')
             plt.plot(self.input_indices, inputs[n, :, plot_col_index],
                      label='Inputs', marker='.', zorder=-10)
 
@@ -212,8 +215,7 @@ class MultiSeriesWindowsGenerator():
                     values = predictions[n, :, label_col_index]
                     x_values = self.label_indices
 
-                plt.scatter(x_values, values,
-                            marker='X', edgecolors='k', label='Predictions',
+                plt.scatter(x_values, values, marker='X', edgecolors='k', label='Predictions',
                             c='#ff7f0e', s=64)
 
             if n == 0:
