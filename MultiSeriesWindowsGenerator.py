@@ -179,7 +179,7 @@ class MultiSeriesWindowsGenerator():
 
         return inputs, labels
 
-    def plot(self, model=None, plot_col=None, max_subplots=3):
+    def plot(self, model=None, plot_col=None, max_subplots=3, single=False):
         inputs, labels = self.example
         if not plot_col:
             plot_col = self.LABELS[0]
@@ -205,7 +205,14 @@ class MultiSeriesWindowsGenerator():
                         edgecolors='k', label='Labels', c='#2ca02c', s=64)
             if model is not None:
                 predictions = model(inputs)
-                plt.scatter(self.label_indices, predictions[n, :, label_col_index],
+                if single:
+                    values = float(predictions[n, label_col_index])
+                    x_values = self.label_indices[-1]
+                else:
+                    values = predictions[n, :, label_col_index]
+                    x_values = self.label_indices
+
+                plt.scatter(x_values, values,
                             marker='X', edgecolors='k', label='Predictions',
                             c='#ff7f0e', s=64)
 
