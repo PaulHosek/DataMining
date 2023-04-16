@@ -140,7 +140,7 @@ class MultiSeriesWindowsGenerator():
 
             self.train_min = train_min
             self.train_max = train_max
-            self.norm = norm
+        self.norm = norm
 
         nan_mask = tf.math.is_nan(self.train_df)
         self.train_df = tf.where(nan_mask, tf.zeros_like(self.train_df), self.train_df)
@@ -179,7 +179,7 @@ class MultiSeriesWindowsGenerator():
 
         return inputs, labels
 
-    def plot(self, model=None, plot_col=None, max_subplots=3, single=False, y_lab=None):
+    def plot(self, model=None, plot_col=None, max_subplots=3, single=False):
         inputs, labels = self.example
         if not plot_col:
             plot_col = self.LABELS[0]
@@ -189,10 +189,8 @@ class MultiSeriesWindowsGenerator():
 
         for n in range(max_n):
             plt.subplot(max_n, 1, n + 1)
-            if y_lab:
-                plt.ylabel(y_lab)
-            else:
-                plt.ylabel(f'{plot_col} {"[normed]" if self.norm else ""}')
+
+            plt.ylabel(f'{plot_col} {"[normed]" if self.norm else ""}')
             plt.plot(self.input_indices, inputs[n, :, plot_col_index],
                      label='Inputs', marker='.', zorder=-10)
 
