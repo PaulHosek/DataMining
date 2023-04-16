@@ -28,6 +28,8 @@ class MultiSeriesWindowsGenerator():
     def __init__(self, input_width, label_width, shift, batch_size, label_columns=[], GROUPBY=None,
                  regressor_columns=[], static_columns=[], DATE = "", LABELS = [""]):
 
+        self.train_max = None
+        self.train_min = None
         self.batch_size = batch_size
 
         # Work out the label column indices.
@@ -74,8 +76,6 @@ class MultiSeriesWindowsGenerator():
             by = self.GROUPBY + [self.DATE]  # [:-1]
             labels = self.label_columns + self.regressor_columns + self.static_columns
             data = data.set_index(by).unstack(-1)
-            # FIXME need to handle new nan better here
-            #
             data.fillna(0, inplace=True)
             data = tf.stack([data[label] for label in labels], axis=-1)
             if data.ndim != 3:
@@ -131,17 +131,17 @@ class MultiSeriesWindowsGenerator():
         self.val_df = self.preprocess_dataset(val_df)
         self.test_df = self.preprocess_dataset(test_df)
 
-
         if norm:
-            train_mean = tf.reduce_mean(self.train_df, axis=1, keepdims=True)
-            train_std = tf.math.reduce_std(self.train_df, axis=1, keepdims=True)
-            self.train_df = (self.train_df - train_mean) / train_std
-            self.val_df = (self.val_df - train_mean) / train_std
-            self.test_df = (self.test_df - train_mean) / train_std
+            train_min = tf.reduce_min(self.train_df, axis=1, keepdims=True)
+            train_max = tf.reduce_max(self.train_df, axis=1, keepdims=True)
+            self.train_df = 0.8 * (self.train_df - train_min) / (train_max - train_min) + 0.1
+            self.val_df = 0.8 * (self.val_df - train_min) / (train_max - train_min) + 0.1
+            self.test_df = 0.8 * (self.test_df - train_min) / (train_max - train_min) + 0.1
 
-            self.train_mean = train_mean
-            self.train_std = train_std
-            self.norm = norm
+            self.train_min = train_min
+            self.train_max = train_max
+        self.norm = norm
+
         nan_mask = tf.math.is_nan(self.train_df)
         self.train_df = tf.where(nan_mask, tf.zeros_like(self.train_df), self.train_df)
 
@@ -179,7 +179,7 @@ class MultiSeriesWindowsGenerator():
 
         return inputs, labels
 
-    def plot(self, model=None, plot_col=None, max_subplots=3):
+    def plot(self, model=None, plot_col=None, max_subplots=3, single=False):
         inputs, labels = self.example
         if not plot_col:
             plot_col = self.LABELS[0]
@@ -189,6 +189,7 @@ class MultiSeriesWindowsGenerator():
 
         for n in range(max_n):
             plt.subplot(max_n, 1, n + 1)
+
             plt.ylabel(f'{plot_col} {"[normed]" if self.norm else ""}')
             plt.plot(self.input_indices, inputs[n, :, plot_col_index],
                      label='Inputs', marker='.', zorder=-10)
@@ -205,8 +206,14 @@ class MultiSeriesWindowsGenerator():
                         edgecolors='k', label='Labels', c='#2ca02c', s=64)
             if model is not None:
                 predictions = model(inputs)
-                plt.scatter(self.label_indices, predictions[n, :, label_col_index],
-                            marker='X', edgecolors='k', label='Predictions',
+                if single:
+                    values = float(predictions[n, label_col_index])
+                    x_values = self.label_indices[-1]
+                else:
+                    values = predictions[n, :, label_col_index]
+                    x_values = self.label_indices
+
+                plt.scatter(x_values, values, marker='X', edgecolors='k', label='Predictions',
                             c='#ff7f0e', s=64)
 
             if n == 0:
@@ -290,94 +297,88 @@ class MultiSeriesWindowsGenerator():
         return result
 
 
-if __name__ == "__main__":
-
-    data_list = []
-    for i in range(0, 27):
-        df = pd.read_csv(f"data/aggregated_individual_data_interpolation/interpolation/{i}_interpolated.csv",
-                         index_col=0)
-        df = pd.read_csv(f"data/aggregated_individual_data_interpolation/interpolation/{i}_interpolated.csv",
-                         index_col=0)
-        df["subject_id"] = i + 1
-        data_list.append(df)
-
-    # Concatenate the data into a single dataset
-    data = pd.concat(data_list)
-    data.drop(["circumplex.arousal_std", "circumplex.valence_std", "mood_std", "activity_std"], inplace=True, axis=1)
-
-    use_date = 0
-
-    if use_date:
-        data.drop(["date"], inplace=True, axis=1)
-        date_time = pd.to_datetime(data.pop('date'))
-        df = data
-        df['days'] = date_time
-
-    else:  # use days from day 0 of recording
-        data.drop(["date"], inplace=True, axis=1)
-        df = data
-
-    df.reset_index(inplace=True, drop=True)
-    df = df.astype({'subject_id': 'float64', 'days': 'float64', 'weekday': 'float64'})
-    df = data
-
-    LABELS = ['mood']
-    REGRESSORS = ['weekday', 'circumplex.arousal', 'circumplex.valence',
-                  'activity', 'screen', 'call', 'sms', 'appCat.builtin',
-                  'appCat.communication', 'appCat.entertainment', 'appCat.finance',
-                  'appCat.game', 'appCat.office', 'appCat.other', 'appCat.social',
-                  'appCat.travel', 'appCat.unknown', 'appCat.utilities', 'appCat.weather']
-
-    DATE = 'days'  # always correct
-    IN_STEPS = 14  # use 7 days
-    OUT_STEPS = 1  # to predict 1 day in the future
-    GROUPBY = ['subject_id']
-    BATCH_SIZE = 8
-
-    n = len(df)
-    train_series = df.groupby(GROUPBY, as_index=False, group_keys=False).apply(
-        lambda x: x.iloc[:int(len(x) * 0.7)]).reset_index(drop=True)
-    val_series = df.groupby(GROUPBY, as_index=False, group_keys=False).apply(
-        lambda x: x.iloc[int(len(x) * 0.7):int(len(x) * 0.9)]).reset_index(drop=True)
-    test_series = df.groupby(GROUPBY, as_index=False, group_keys=False).apply(
-        lambda x: x.iloc[int(len(x) * 0.9):]).reset_index(drop=True)
-
-    test_window = MultiSeriesWindowsGenerator(
-        input_width=IN_STEPS, label_width=OUT_STEPS, shift=1, batch_size=BATCH_SIZE, GROUPBY=GROUPBY,
-        label_columns=LABELS, regressor_columns=REGRESSORS, DATE=DATE, LABELS=LABELS)
-
-    test_window.update_datasets(train_series, val_series, test_series, norm=True)
-    # print(test_window.test_df)
-    lstm_model = tf.keras.models.Sequential([
-        # Shape [batch, time, features] => [batch, time, lstm_units]
-        tf.keras.layers.LSTM(32, return_sequences=True),
-        # Shape => [batch, time, features]
-        tf.keras.layers.Dense(units=1)
-    ])
-    MAX_EPOCHS = 20
-
-
-    def compile_and_fit(model, window, patience=2):
-        early_stopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss',
-                                                          patience=patience,
-                                                          mode='min')
-
-        model.compile(loss=tf.keras.losses.MeanSquaredError(),
-                      optimizer=tf.keras.optimizers.Adam(),
-                      metrics=[tf.keras.metrics.MeanAbsoluteError()])
-
-        history = model.fit(window.train, epochs=MAX_EPOCHS,
-                            validation_data=window.val,
-                            callbacks=[early_stopping])
-        return history
-
-    history = compile_and_fit(lstm_model, test_window)
-    val_performance = {}
-    performance = {}
-    val_performance['LSTM'] = lstm_model.evaluate(test_window.val)
-    performance['LSTM'] = lstm_model.evaluate(test_window.test, verbose=0)
-
-    test_window.plot(lstm_model)
+# if __name__ == "__main__":
+#
+#     # data_list = []
+#     # for i in range(0, 27):
+#     #     df = pd.read_csv(f"data/aggregated_individual_data_interpolation/interpolation/{i}_interpolated.csv",
+#     #                      index_col=0)
+#     #     df = pd.read_csv(f"data/aggregated_individual_data_interpolation/interpolation/{i}_interpolated.csv",
+#     #                      index_col=0)
+#     #     df["subject_id"] = i + 1
+#     #     data_list.append(df)
+#     #
+#     # # Concatenate the data into a single dataset
+#     # data = pd.concat(data_list)
+#     # data.drop(["circumplex.arousal_std", "circumplex.valence_std", "mood_std", "activity_std"], inplace=True, axis=1)
+#     df = pd.read_csv("data/all_data_aggr_nonan.csv", index_col=0)
+#
+#     LABELS = ['mood']
+#     REGRESSORS = ['weekday', 'circumplex.arousal', 'circumplex.valence',
+#                   'activity', 'screen', 'call', 'sms', 'appCat.builtin',
+#                   'appCat.communication', 'appCat.entertainment', 'appCat.finance',
+#                   'appCat.game', 'appCat.office', 'appCat.other', 'appCat.social',
+#                   'appCat.travel', 'appCat.unknown', 'appCat.utilities', 'appCat.weather']
+#
+#     DATE = 'days'  # always correct
+#     IN_STEPS = 14  # use 7 days
+#     OUT_STEPS = 14  # to predict 1 day in the future
+#     GROUPBY = ['subject_id']
+#     BATCH_SIZE = 8
+#
+#     n = len(df)
+#     train_series = df.groupby(GROUPBY, as_index=False, group_keys=False).apply(
+#         lambda x: x.iloc[:int(len(x) * 0.7)]).reset_index(drop=True)
+#     val_series = df.groupby(GROUPBY, as_index=False, group_keys=False).apply(
+#         lambda x: x.iloc[int(len(x) * 0.7):int(len(x) * 0.9)]).reset_index(drop=True)
+#     test_series = df.groupby(GROUPBY, as_index=False, group_keys=False).apply(
+#         lambda x: x.iloc[int(len(x) * 0.9):]).reset_index(drop=True)
+#
+#     test_window = MultiSeriesWindowsGenerator(
+#         input_width=IN_STEPS, label_width=OUT_STEPS, shift=1, batch_size=BATCH_SIZE, GROUPBY=GROUPBY,
+#         label_columns=LABELS, regressor_columns=REGRESSORS, DATE=DATE, LABELS=LABELS)
+#
+#     test_window.update_datasets(train_series, val_series, test_series, norm=True)
+#
+#     lstm_model = tf.keras.models.Sequential([
+#         tf.keras.layers.LSTM(128, return_sequences=True,activation="relu"),
+#         tf.keras.layers.Dropout(0.2),
+#         tf.keras.layers.LSTM(128, return_sequences=False, activation="relu"),
+#         tf.keras.layers.Dropout(0.2),
+#         tf.keras.layers.Dense(units=1, activation='sigmoid', kernel_regularizer=tf.keras.regularizers.l2(0.001))
+#     ])
+#
+#     lstm_model = tf.keras.models.Sequential([
+#         # Shape [batch, time, features] => [batch, time, lstm_units]
+#         tf.keras.layers.LSTM(32, return_sequences=True),
+#         # Shape => [batch, time, features]
+#         tf.keras.layers.Dense(units=1)
+#     ])
+#
+#     MAX_EPOCHS = 20
+#
+#
+#     def compile_and_fit(model, window, patience=2):
+#         early_stopping = tf.keras.callbacks.EarlyStopping(monitor='loss',
+#                                                           patience=patience,
+#                                                           mode='min')
+#
+#         model.compile(loss=tf.keras.losses.MeanSquaredError(),
+#                       optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
+#                       metrics=[tf.keras.metrics.MeanAbsoluteError()])
+#
+#         history = model.fit(window.train, epochs=MAX_EPOCHS,
+#                             validation_data=window.val,
+#                             callbacks=[early_stopping])
+#         return history
+#
+#     history = compile_and_fit(lstm_model, test_window)
+#     val_performance = {}
+#     performance = {}
+#     val_performance['LSTM'] = lstm_model.evaluate(test_window.val)
+#     performance['LSTM'] = lstm_model.evaluate(test_window.test, verbose=0)
+#
+#     test_window.plot(lstm_model)
 
 
 
