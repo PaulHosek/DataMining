@@ -296,6 +296,17 @@ class MultiSeriesWindowsGenerator():
             self._example = result
         return result
 
+    @property
+    def test_data(self):
+        """Get and cache all batches of `inputs, labels` for the test set"""
+        result = getattr(self, '_test_data', None)
+        if result is None:
+            result = []
+            for batch in self.test:
+                result.append(batch)
+            self._test_data = result
+        return result
+
 
 # if __name__ == "__main__":
 #
