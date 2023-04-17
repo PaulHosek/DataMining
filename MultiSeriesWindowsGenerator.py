@@ -217,7 +217,7 @@ class MultiSeriesWindowsGenerator():
                             c='#ff7f0e', s=64)
 
             if n == 0:
-                plt.legend()
+                plt.legend(facecolor='white', framealpha=1, edgecolor='black')
 
         plt.xlabel('Time [Days]')
         plt.show()
