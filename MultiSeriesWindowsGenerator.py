@@ -217,7 +217,7 @@ class MultiSeriesWindowsGenerator():
                             c='#ff7f0e', s=64)
 
             if n == 0:
-                plt.legend()
+                plt.legend(facecolor='white', framealpha=1, edgecolor='black')
 
         plt.xlabel('Time [Days]')
         plt.show()
@@ -294,6 +294,17 @@ class MultiSeriesWindowsGenerator():
         if result is None:
             result = next(iter(self.train))
             self._example = result
+        return result
+
+    @property
+    def test_data(self):
+        """Get and cache all batches of `inputs, labels` for the test set"""
+        result = getattr(self, '_test_data', None)
+        if result is None:
+            result = []
+            for batch in self.test:
+                result.append(batch)
+            self._test_data = result
         return result
 
 
