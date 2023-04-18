@@ -84,37 +84,6 @@ class MultiSeriesWindowsGenerator():
             print('Error while processing dataset', e)
         return data
 
-    # def preprocess_dataset_test(self, data: pd.DataFrame):
-    #     """
-    #     Preprocesses a pandas DataFrame containing time series data by
-    #      filling missing values with zeros and stacking a boolean mask
-    #     tensor to indicate where NaN values are.
-    #     Args:
-    #         data: A pandas DataFrame containing time series data.
-    #     Returns:
-    #         A tensorflow Tensor with shape [batch_size, time_steps, num_features + 1],
-    #          where the last dimension contains the
-    #         preprocessed data values and a boolean mask tensor indicating where NaN values are.
-    #     """
-    #     try:
-    #         if np.vstack(data.index).shape[1] != 1:
-    #             data = data.reset_index()
-    #
-    #         by = self.GROUPBY[:-1] + [self.DATE]
-    #         labels = self.label_columns + self.regressor_columns + self.static_columns
-    #         data = data.set_index(by).unstack(-1)
-    #         mask = tf.cast(tf.math.is_nan(data), dtype=tf.float32)
-    #         data = tf.where(tf.math.is_nan(data), tf.zeros_like(data), data)
-    #
-    #         # Stack the data and mask tensors together
-    #         data = tf.stack([data[label] for label in labels] + [mask], axis=-1)
-    #
-    #         if data.ndim != 3:
-    #             data = data[None, None, tf.newaxis]
-    #     except Exception as e:
-    #         print('Error while processing dataset', e)
-    #     return data
-
 
     def update_datasets(self, train_df: pd.DataFrame, val_df: pd.DataFrame, test_df: pd.DataFrame, norm: bool = False):
         """
