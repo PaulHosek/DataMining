@@ -15,7 +15,7 @@ def interpolate_aggr(id, in_path="data/aggregated_individual_data_interpolation/
     df.fillna(0)  # fill beginning and end with 0 if cannot interpolate
     df.to_csv(f"{out_path}/{id}_interpolated.csv")
 
-def aggregate_individual_data_per_reading(raw=pd.DataFrame, to_average=None ):
+def aggregate_individual_data_per_reading(raw=pd.DataFrame, to_average=None, drop_na = True ):
     """
     for the raw data of one individual a new df is generated with the variables as columns. Values are summed unless their variable name is 
     specified to be averaged in to_average.
@@ -84,9 +84,10 @@ def aggregate_individual_data_per_reading(raw=pd.DataFrame, to_average=None ):
     processed['time'] = pd.to_datetime(processed.loc[:,'time'])
     processed.sort_values('time')
 
-    # delete all data points where mood or screen are 0
-    processed.drop(processed.loc[processed['mood'].isna() | (processed['screen'] == 0)].index, inplace=True)
-    #processed.drop(processed.loc[processed['mood'].isna()].index, inplace=True)
+    if drop_na == True:
+        # delete all data points where mood or screen are 0
+        processed.drop(processed.loc[processed['mood'].isna() | (processed['screen'] == 0)].index, inplace=True)
+        #processed.drop(processed.loc[processed['mood'].isna()].index, inplace=True)
 
     processed.reset_index(drop= True, inplace= True)
 
