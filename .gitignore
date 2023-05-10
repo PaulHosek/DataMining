@@ -39,3 +39,4 @@ Thumbs.db
 data/training_set_VU_DM.csv
 data/test_set_VU_DM.csv
 data/submission_sample.csv
+data/FE_training_set.csv
