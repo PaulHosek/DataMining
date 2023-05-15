@@ -42,5 +42,6 @@ data/submission_sample.csv
 data/FE_training_set.csv
 data/FE_test_set.csv
 data/testOrderBenchmark.csv
+data/predictions
 
 Nik_trying
