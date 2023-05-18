@@ -1,23 +1,10 @@
 
 import pandas as pd
 import numpy as np
-import matplotlib.pylab as plt
 from datetime import datetime
-import random
-
 from tqdm import tqdm
-
-from xgboost import XGBRegressor, XGBRanker
-#from sklearn.xgboost import XGBRegressor
-
-from sklearn.ensemble import HistGradientBoostingRegressor, GradientBoostingRegressor, HistGradientBoostingClassifier, AdaBoostRegressor
-from sklearn.model_selection import RandomizedSearchCV, train_test_split
-from sklearn.model_selection import cross_val_score, RepeatedStratifiedKFold
 from sklearn.metrics import mean_squared_error, ndcg_score
 from sklearn.utils import resample
-from sklearn.experimental import enable_halving_search_cv
-from sklearn.model_selection import HalvingRandomSearchCV, GroupKFold
-import lightgbm
 import flaml
 import joblib
 
@@ -29,8 +16,8 @@ def import_df(filename):
     """
     temp_df = pd.read_csv(f'data/{filename}')
     temp_df.drop(['Unnamed: 0',"date_time"], axis=1, inplace=True)
-    temp_df['target'] = temp_df['click_bool'] + 4 * temp_df['booking_bool']
-    temp_df['target'].loc[temp_df['target'].isna()] = int(0)
+    temp_df.loc[:, 'target'] = temp_df['click_bool'] + 4 * temp_df['booking_bool']
+    temp_df['target'].fillna(0, inplace=True)
     return temp_df
 
 def undersample(train_df, drop_cols = ['click_bool', 'gross_bookings_usd',
