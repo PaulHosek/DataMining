@@ -76,6 +76,15 @@ def fit_automodel(x_df,y_df,groups, parameters = {}, **kwargs):
     model.fit(x_df.drop(columns=['srch_id']), y_df, **default_parameters, **kwargs)
     return model
 
+
+def fit_manualmodel(x_df,y_df,groups,manual_model, **kwargs):
+    """
+    Fit a non-autotuned model.
+    Provide additional arguments to the fit method as if you are using to it directly:
+    e.g., fit_manualmodel(..., epochs=10, batch_size=32)
+    """
+    manual_model.fit(x_df, y_df, group=groups,**kwargs)
+
 def save_mod(model, name):
     joblib.dump(model,f"{name}.plk")
 
@@ -84,8 +93,8 @@ def load_mod(name):
     return joblib.load(f"{name}.plk")
 
 
-def eval_ndcg2(test_df, model):
-    temp = test_df.drop(['srch_id', 'click_bool', 'gross_bookings_usd', 'booking_bool', 'position', 'target'], axis=1)
+def eval_ndcg(test_df, model):
+    temp = test_df.drop(columns=np.setdiff1d(test_df.columns,model.feature_name_))
     test_df['pred_score'] = model.predict(temp)
 
     test_df['pred_rank'] = test_df.groupby('srch_id')['pred_score'].rank(ascending=False).astype(int)
@@ -119,3 +128,4 @@ def make_submission(model):
     filename = 'data/predictions/prediction' + str(datetime.now()) + '.csv'
     comp_data[['srch_id', 'prop_id']].to_csv(filename, index=False)
     print(f"Submission saved under {filename}")
+
